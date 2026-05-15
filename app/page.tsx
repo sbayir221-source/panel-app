@@ -130,7 +130,7 @@ export default function MultiUserBlog() {
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 pb-20 selection:bg-emerald-500/30">
       <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50 h-16 flex items-center px-6 justify-between">
-        <div className="font-black text-xl italic tracking-tighter text-emerald-500">BAYIR'S BLOG</div>
+        <div className="font-black text-xl italic tracking-tighter text-emerald-500">BAYIR'S HARD SCRIPT</div>
         {user && (
           <div className="flex items-center gap-4">
             <button onClick={copyLink} className="hidden md:flex text-[10px] font-black uppercase tracking-widest bg-zinc-900 border border-zinc-800 px-3 py-2 rounded-lg items-center gap-2 hover:bg-zinc-800 transition-all">
