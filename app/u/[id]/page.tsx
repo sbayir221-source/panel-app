@@ -17,8 +17,10 @@ const parseBBCode = (text: string = "") => {
 
 export default function UserProfile() {
   const params = useParams();
-  // URL'deki ID'yi garantiye alıyoruz. Eğer params.id yoksa window.location'dan manuel cımbızlıyoruz.
-  const profileId = params?.id ? (params.id as string) : typeof window !== "undefined" ? window.location.pathname.split("/").pop() : "";
+  
+  // profileId'nin her zaman bir string olacağını garanti ediyoruz
+  const profileId: string = (params?.id as string) || 
+    (typeof window !== "undefined" ? window.location.pathname.split("/").pop() || "" : "");
   
   const router = useRouter();
   const [userPosts, setUserPosts] = useState<any[]>([]);
@@ -41,7 +43,7 @@ export default function UserProfile() {
       if (docSnap.exists()) {
         setProfileData(docSnap.data());
       } else {
-        setProfileData(null); // Eğer henüz nick/bio ayarlanmadıysa sıfırla
+        setProfileData(null);
       }
     });
 
@@ -53,12 +55,12 @@ export default function UserProfile() {
       setUserPosts(fetched);
       setLoading(false);
     }, (error) => {
-      console.error("Yazılar çekilirken hata:", error);
+      console.error(error);
       setLoading(false);
     });
 
     return () => { unsubSettings(); unsubProfile(); unsubPosts(); };
-  }, [profileId]); // profileId değiştiğinde bu sayfa mecbur sıfırdan tetiklenecek
+  }, [profileId]);
 
   const themeColor = siteSettings.accentColor || "emerald";
   const themeText = `text-${themeColor}-500`;
@@ -67,8 +69,8 @@ export default function UserProfile() {
 
   if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Profil Yükleniyor...</div>;
 
-  // Maskeleme kuralları
-  const displayNickname = profileData?.nickname || "yazar_" + profileId.substring(0, 5);
+  // Maskeleme kuralları - Güvenli hale getirildi
+  const displayNickname = profileData?.nickname || "yazar_" + (profileId ? profileId.substring(0, 5) : "anon");
   const displayBio = profileData?.bio || "Bu yazar henüz hakkında bir yazı eklememiş.";
 
   return (
