@@ -11,6 +11,7 @@ import {
   Trash2, Plus, Calendar, LogOut, PenTool, 
   User as UserIcon, X, Globe, UserPlus, UserCheck, Copy, Check, Rss 
 } from "lucide-react";
+import { useRouter } from "next/navigation"; // Yeni eklendi
 
 type BlogPost = { 
   id: string; 
@@ -23,11 +24,10 @@ type BlogPost = {
 };
 
 const categories = ["Genel", "Teknoloji", "Yaşam", "Yazılım"];
-
-// ADMIN UID TANIMI
 const ADMIN_UID = "jVRQixwQyWWGhg0i9i5s88xjK6u1";
 
 export default function MultiUserBlog() {
+  const router = useRouter(); // Yönlendirme için tanımladık
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<BlogPost[]>([]); 
   const [feedPosts, setFeedPosts] = useState<BlogPost[]>([]); 
@@ -57,7 +57,6 @@ export default function MultiUserBlog() {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Yazılarım
     const qMy = query(collection(db, "posts"), where("userId", "==", user.uid));
     const unsubMy = onSnapshot(qMy, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
@@ -65,7 +64,6 @@ export default function MultiUserBlog() {
       setPosts(fetched);
     });
 
-    // 2. Takip Ettiklerimin Listesi
     const qFollows = query(collection(db, "follows"), where("followerId", "==", user.uid));
     const unsubFollows = onSnapshot(qFollows, (snap) => {
       const ids = snap.docs.map(d => d.data().followingId);
@@ -83,7 +81,6 @@ export default function MultiUserBlog() {
       }
     });
 
-    // 3. Keşfet (Tüm yazılar)
     const qExplore = query(collection(db, "posts"), limit(100));
     const unsubExplore = onSnapshot(qExplore, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
@@ -125,12 +122,12 @@ export default function MultiUserBlog() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-mono text-xs uppercase tracking-widest">Sistem Bağlantısı Kuruluyor...</div>;
+  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-mono text-xs uppercase tracking-widest">Sistem Hazırlanıyor...</div>;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 pb-20 selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 pb-20 selection:bg-emerald-500/30 font-sans">
       <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50 h-16 flex items-center px-6 justify-between">
-        <div className="font-black text-xl italic tracking-tighter text-emerald-500">BAYIR'S HARD SCRIPT</div>
+        <div className="font-black text-xl italic tracking-tighter text-emerald-500 cursor-pointer" onClick={() => router.push("/")}>BAYIR'S BLOG</div>
         {user && (
           <div className="flex items-center gap-4">
             <button onClick={copyLink} className="hidden md:flex text-[10px] font-black uppercase tracking-widest bg-zinc-900 border border-zinc-800 px-3 py-2 rounded-lg items-center gap-2 hover:bg-zinc-800 transition-all">
@@ -172,11 +169,21 @@ export default function MultiUserBlog() {
                 const isFollowing = followingIds.includes(post.userId);
 
                 return (
-                  <article key={post.id} onClick={() => isMyPost && setEditingPost(post)} className={`group bg-zinc-900/30 border border-zinc-800/50 p-8 rounded-3xl transition-all relative ${isMyPost ? "cursor-pointer hover:bg-zinc-900/50" : "hover:bg-zinc-900/40"}`}>
+                  <article 
+                    key={post.id} 
+                    onClick={() => {
+                      if (isMyPost) {
+                        setEditingPost(post);
+                      } else {
+                        router.push(`/u/${post.userId}`);
+                      }
+                    }}
+                    className={`group bg-zinc-900/30 border border-zinc-800/50 p-8 rounded-3xl transition-all relative cursor-pointer ${isMyPost ? "hover:bg-zinc-900/50" : "hover:bg-zinc-900/40 hover:border-emerald-500/30"}`}
+                  >
                     <div className="flex justify-between items-start mb-6">
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500">{post.category}</span>
-                        {!isMyPost && <span className="text-[11px] text-zinc-500 font-bold lowercase">@{post.userEmail?.split('@')[0]}</span>}
+                        {!isMyPost && <span className="text-[11px] text-zinc-500 font-bold lowercase hover:text-emerald-400">@{post.userEmail?.split('@')[0]} • Profili Gör</span>}
                       </div>
 
                       <div className="flex items-center gap-2">
@@ -204,10 +211,10 @@ export default function MultiUserBlog() {
 
       {/* DÜZENLEME MODALI */}
       {editingPost && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm">
           <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2.5rem] w-full max-w-2xl relative shadow-2xl">
             <button onClick={() => setEditingPost(null)} className="absolute top-8 right-8 text-zinc-500 hover:text-white transition-colors"><X size={24}/></button>
-            <h2 className="text-2xl font-black mb-8 text-emerald-500 italic">DÜZENLE</h2>
+            <h2 className="text-2xl font-black mb-8 text-emerald-500 italic uppercase">Düzenle</h2>
             <div className="space-y-6">
               <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none focus:border-emerald-500 transition-all font-bold text-xl" />
               <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none focus:border-emerald-500 transition-all resize-none leading-relaxed" rows={8} />
