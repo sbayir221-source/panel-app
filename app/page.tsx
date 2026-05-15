@@ -57,7 +57,6 @@ export default function MultiUserBlog() {
     const q = query(
       collection(db, "posts"),
       where("userId", "==", user.uid), // Kritik nokta: Sadece benimkiler!
-      orderBy("createdAt", "desc")
     );
 
     const unsubPosts = onSnapshot(q, (snap) => {
