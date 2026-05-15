@@ -9,7 +9,7 @@ import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User 
 import { db, auth } from "@/lib/firebase";
 import { 
   Trash2, Calendar, LogOut, User as UserIcon, X, Globe, 
-  Image as ImageIcon, Heart, MessageCircle, Send, Loader2, Tag 
+  Image as ImageIcon, Heart, MessageCircle, Send, Loader2, ShieldAlert, BarChart3
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -31,11 +31,12 @@ const ADMIN_UID = "jVRQixwQyWWGhg0i9i5s88xjK6u1";
 export default function MultiUserBlog() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [allPosts, setAllPosts] = useState<any[]>([]); // Tüm veriyi burada tutuyoruz
+  const [allPosts, setAllPosts] = useState<any[]>([]); 
+  const [allComments, setAllComments] = useState<any[]>([]); // Admin paneli istatistiği için
   const [loading, setLoading] = useState(true);
   
   // SEKME VE FİLTRELEME
-  const [activeTab, setActiveTab] = useState<"explore" | "my">("explore");
+  const [activeTab, setActiveTab] = useState<"explore" | "my" | "admin">("explore");
   const [activeCategory, setActiveCategory] = useState("Hepsi");
   
   const [title, setTitle] = useState("");
@@ -60,14 +61,21 @@ export default function MultiUserBlog() {
     return () => unsubAuth();
   }, []);
 
+  // Canlı Veri Dinleyicileri
   useEffect(() => {
     const qAll = query(collection(db, "posts"), limit(200));
-    const unsub = onSnapshot(qAll, (snap) => {
+    const unsubPosts = onSnapshot(qAll, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
       fetched.sort((a: any, b: any) => b.createdAt - a.createdAt);
       setAllPosts(fetched);
     });
-    return () => unsub();
+
+    // Tüm yorumları dinle (Sadece admin paneli sayacı için)
+    const unsubCommentsAll = onSnapshot(collection(db, "comments"), (snap) => {
+      setAllComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+
+    return () => { unsubPosts(); unsubCommentsAll(); };
   }, []);
 
   // FİLTRELEME MANTIĞI
@@ -77,6 +85,7 @@ export default function MultiUserBlog() {
     return matchesTab && matchesCategory;
   });
 
+  // Seçili yazıya ait yorumları getir
   useEffect(() => {
     if (!selectedPostForComments) {
       setComments([]);
@@ -92,20 +101,15 @@ export default function MultiUserBlog() {
   }, [selectedPostForComments]);
 
   const addPost = async () => {
-    if (!title.trim() || !content.trim() || !user) {
-        alert("Başlık ve içerik zorunludur!");
-        return;
-    }
+    if (!title.trim() || !content.trim() || !user) return;
     try {
       await addDoc(collection(db, "posts"), { 
           title: title.trim(), content: content.trim(), category, imageUrl: imageUrl || null, 
           createdAt: Date.now(), userId: user.uid, userEmail: user.email, likes: []
       });
       setTitle(""); setContent(""); setImageUrl(""); setShowImageInput(false);
-      alert("Paylaşıldı! 🚀");
-    } catch (e) {
-      alert("Hata oluştu!");
-    }
+      alert("Yazı paylaşıldı! 🚀");
+    } catch (e) { alert("Hata oluştu!"); }
   };
 
   const addComment = async () => {
@@ -128,7 +132,7 @@ export default function MultiUserBlog() {
     await updateDoc(postRef, { likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid) });
   };
 
-  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs tracking-widest italic">Yükleniyor...</div>;
+  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Sistem Yükleniyor...</div>;
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-emerald-500/30">
@@ -138,12 +142,13 @@ export default function MultiUserBlog() {
       </nav>
 
       <main className="max-w-4xl mx-auto px-6 pt-12">
-        {user && (
-          <div className="mb-12 bg-zinc-900/40 border border-zinc-800/50 p-8 rounded-[2.5rem] shadow-2xl">
+        {user && activeTab !== "admin" && (
+          /* PAYLAŞIM FORMU (Yönetim panelindeyken gizlenir) */
+          <div className="mb-12 bg-zinc-900/40 border border-zinc-800/50 p-8 rounded-[2.5rem]">
              <input placeholder="Başlık (Zorunlu)" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-transparent text-2xl font-black mb-4 outline-none placeholder:text-zinc-800" />
              <div className="flex gap-2 mb-4">
-                <button onClick={() => setContent(content + "[b][/b]")} className="text-[10px] bg-zinc-800 px-3 py-1.5 rounded-lg font-black text-zinc-500 uppercase hover:text-white">Bold</button>
-                <button onClick={() => setContent(content + "[img][/img]")} className="text-[10px] bg-zinc-800 px-3 py-1.5 rounded-lg font-black text-emerald-500 uppercase hover:bg-emerald-500/10">Img</button>
+                <button onClick={() => setContent(content + "[b][/b]")} className="text-[10px] bg-zinc-800 px-3 py-1.5 rounded-lg font-black text-zinc-500 uppercase">Bold</button>
+                <button onClick={() => setContent(content + "[img][/img]")} className="text-[10px] bg-zinc-800 px-3 py-1.5 rounded-lg font-black text-emerald-500 uppercase">Img</button>
              </div>
              <textarea placeholder="Neler oluyor?" value={content} onChange={e=>setContent(e.target.value)} className="w-full bg-transparent mb-4 outline-none resize-none text-lg" rows={3} />
              {showImageInput && <input placeholder="Kapak Resmi Linki..." value={imageUrl} onChange={e=>setImageUrl(e.target.value)} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl mb-4 text-sm text-white" />}
@@ -159,76 +164,114 @@ export default function MultiUserBlog() {
           </div>
         )}
 
-        {/* --- YENİ KATEGORİ VE TAB SİSTEMİ --- */}
+        {/* --- SEKME SİSTEMİ --- */}
         <div className="flex flex-col gap-6 mb-10">
-          <div className="flex gap-8 border-b border-zinc-800/50">
+          <div className="flex gap-8 border-b border-zinc-800/50 items-center">
             <button onClick={() => setActiveTab("explore")} className={`pb-4 text-[11px] font-black uppercase tracking-widest ${activeTab === "explore" ? "text-emerald-500 border-b-2 border-emerald-500" : "text-zinc-600"}`}>Keşfet</button>
             <button onClick={() => setActiveTab("my")} className={`pb-4 text-[11px] font-black uppercase tracking-widest ${activeTab === "my" ? "text-emerald-500 border-b-2 border-emerald-500" : "text-zinc-600"}`}>Yazılarım</button>
+            
+            {/* GİZLİ ADMİN BUTONU (Sadece sana görünür) */}
+            {isAdmin && (
+              <button onClick={() => setActiveTab("admin")} className={`pb-4 text-[11px] font-black uppercase tracking-widest flex items-center gap-1 transition-colors ${activeTab === "admin" ? "text-red-500 border-b-2 border-red-500" : "text-zinc-700 hover:text-red-400"}`}>
+                <ShieldAlert size={14}/> Yönetim
+              </button>
+            )}
           </div>
           
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-            {categories.map((c) => (
-              <button 
-                key={c} 
-                onClick={() => setActiveCategory(c)} 
-                className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${activeCategory === c ? "bg-emerald-500 border-emerald-500 text-[#09090b]" : "bg-transparent border-zinc-800 text-zinc-500 hover:border-zinc-600"}`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-10">
-          {filteredPosts.length === 0 ? (
-             <div className="text-center py-20 border-2 border-dashed border-zinc-900 rounded-[3rem]">
-                <p className="text-zinc-700 font-black uppercase text-[10px] tracking-[0.5em]">Bu kategoride henüz yazı yok.</p>
-             </div>
-          ) : (
-            filteredPosts.map((post: any) => {
-              const isMyPost = post.userId === user?.uid;
-              const hasLiked = post.likes?.includes(user?.uid);
-              return (
-                <article key={post.id} className="bg-zinc-900/20 border border-zinc-800/50 rounded-[3rem] overflow-hidden hover:bg-zinc-900/30 transition-all cursor-pointer group">
-                  {post.imageUrl && <img src={post.imageUrl} className="w-full h-72 object-cover" onClick={() => isMyPost ? setEditingPost(post) : router.push(`/u/${post.userId}`)}/>}
-                  <div className="p-8">
-                    <div className="flex justify-between mb-4 text-[10px] font-black uppercase tracking-widest">
-                      <span className="text-emerald-500 bg-emerald-500/5 px-2 py-1 rounded">{post.category}</span>
-                      {(isMyPost || isAdmin) && <button onClick={async (e) => { e.stopPropagation(); if(confirm("Silinsin mi?")) await deleteDoc(doc(db, "posts", post.id)); }} className="text-zinc-800 hover:text-red-500"><Trash2 size={18}/></button>}
-                    </div>
-                    <h3 className="text-2xl font-bold mb-4" onClick={() => isMyPost ? setEditingPost(post) : router.push(`/u/${post.userId}`)}>{post.title}</h3>
-                    <div className="text-zinc-400 text-sm mb-8" dangerouslySetInnerHTML={parseBBCode(post.content)} />
-                    <div className="flex items-center gap-6 pt-6 border-t border-zinc-800/30">
-                      <button onClick={(e) => toggleLike(e, post)} className={`flex items-center gap-2 text-xs font-bold transition-all ${hasLiked ? 'text-red-500' : 'text-zinc-600 hover:text-red-400'}`}>
-                        <Heart size={20} fill={hasLiked ? "currentColor" : "none"} /> {post.likes?.length || 0}
-                      </button>
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedPostForComments(post); }} className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-emerald-400">
-                        <MessageCircle size={20} /> Yorumlar
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              );
-            })
+          {activeTab !== "admin" && (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+              {categories.map((c) => (
+                <button key={c} onClick={() => setActiveCategory(c)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all border ${activeCategory === c ? "bg-emerald-500 border-emerald-500 text-[#09090b]" : "bg-transparent border-zinc-800 text-zinc-500"}`}>{c}</button>
+              ))}
+            </div>
           )}
         </div>
+
+        {/* --- İÇERİK ALANI --- */}
+        {activeTab === "admin" && isAdmin ? (
+          /* 👑 ADMİN PANELİ GÖRÜNÜMÜ */
+          <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl flex items-center justify-between">
+                <div><p className="text-xs text-zinc-500 uppercase font-black tracking-widest">Toplam İçerik</p><h4 className="text-3xl font-black text-white mt-1">{allPosts.length}</h4></div>
+                <BarChart3 className="text-zinc-700" size={32}/>
+              </div>
+              <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl flex items-center justify-between">
+                <div><p className="text-xs text-zinc-500 uppercase font-black tracking-widest">Toplam Yorum</p><h4 className="text-3xl font-black text-emerald-500 mt-1">{allComments.length}</h4></div>
+                <MessageCircle className="text-zinc-700" size={32}/>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/20 border border-zinc-800/60 p-6 rounded-[2rem]">
+              <h3 className="text-lg font-black uppercase text-red-500 mb-6 italic tracking-tight">Tüm Platform İçerikleri (Hızlı Denetim)</h3>
+              <div className="space-y-4">
+                {allPosts.map((post: any) => (
+                  <div key={post.id} className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-xl flex items-center justify-between gap-4">
+                    <div className="truncate">
+                      <p className="text-sm font-bold text-white truncate">{post.title}</p>
+                      <p className="text-[10px] text-zinc-500 lowercase mt-1">Yazar: @{post.userEmail?.split('@')[0]} • Kategori: {post.category}</p>
+                    </div>
+                    <button 
+                      onClick={async () => { if(confirm(`"${post.title}" başlıklı yazıyı ADMIN yetkisiyle kalıcı olarak silmek istiyor musunuz?`)) await deleteDoc(doc(db, "posts", post.id)); }} 
+                      className="bg-red-500/10 text-red-500 p-2.5 rounded-lg hover:bg-red-500 hover:text-white transition-all flex-shrink-0"
+                    >
+                      <Trash2 size={16}/>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* REGÜLER YAZI GÖRÜNÜMÜ */
+          <div className="grid grid-cols-1 gap-10">
+            {filteredPosts.length === 0 ? (
+               <div className="text-center py-20 border-2 border-dashed border-zinc-900 rounded-[3rem]"><p className="text-zinc-700 font-black uppercase text-[10px] tracking-[0.5em]">Yazı bulunamadı.</p></div>
+            ) : (
+              filteredPosts.map((post: any) => {
+                const isMyPost = post.userId === user?.uid;
+                const hasLiked = post.likes?.includes(user?.uid);
+                return (
+                  <article key={post.id} className="bg-zinc-900/20 border border-zinc-800/50 rounded-[3rem] overflow-hidden hover:bg-zinc-900/30 transition-all cursor-pointer group">
+                    {post.imageUrl && <img src={post.imageUrl} className="w-full h-72 object-cover" onClick={() => isMyPost ? setEditingPost(post) : router.push(`/u/${post.userId}`)}/>}
+                    <div className="p-8">
+                      <div className="flex justify-between mb-4 text-[10px] font-black uppercase tracking-widest">
+                        <span className="text-emerald-500 bg-emerald-500/5 px-2 py-1 rounded">{post.category || "Genel"}</span>
+                        {(isMyPost || isAdmin) && <button onClick={async (e) => { e.stopPropagation(); if(confirm("Silinsin mi?")) await deleteDoc(doc(db, "posts", post.id)); }} className="text-zinc-800 hover:text-red-500"><Trash2 size={18}/></button>}
+                      </div>
+                      <h3 className="text-2xl font-bold mb-4" onClick={() => isMyPost ? setEditingPost(post) : router.push(`/u/${post.userId}`)}>{post.title}</h3>
+                      <div className="text-zinc-400 text-sm mb-8" dangerouslySetInnerHTML={parseBBCode(post.content)} />
+                      <div className="flex items-center gap-6 pt-6 border-t border-zinc-800/30">
+                        <button onClick={(e) => toggleLike(e, post)} className={`flex items-center gap-2 text-xs font-bold transition-all ${hasLiked ? 'text-red-500' : 'text-zinc-600'}`}>
+                          <Heart size={20} fill={hasLiked ? "currentColor" : "none"} /> {post.likes?.length || 0}
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); setSelectedPostForComments(post); }} className="flex items-center gap-2 text-xs font-bold text-zinc-600 hover:text-emerald-400">
+                          <MessageCircle size={20} /> Yorumlar
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        )}
       </main>
 
-      {/* YORUM VE DÜZENLEME MODALLARI AYNI KALIYOR */}
+      {/* MODALLAR (Yorum ve Düzenleme) */}
       {selectedPostForComments && (
         <div className="fixed inset-0 z-[110] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/90 backdrop-blur-md">
-          <div className="bg-[#0c0c0e] border-t md:border border-zinc-800 w-full max-w-2xl rounded-t-[2rem] md:rounded-[2.5rem] h-[80vh] flex flex-col relative shadow-2xl overflow-hidden">
-            <button onClick={() => setSelectedPostForComments(null)} className="absolute top-6 right-6 text-zinc-600 hover:text-white transition-colors z-10"><X/></button>
-            <div className="p-8 border-b border-zinc-800/50 bg-[#0c0c0e]">
-              <h2 className="text-xl font-black text-emerald-500 uppercase italic tracking-tighter">Yorumlar</h2>
-              <p className="text-[10px] text-zinc-600 uppercase mt-1 truncate">{selectedPostForComments.title}</p>
+          <div className="bg-[#0c0c0e] border-t md:border border-zinc-800 w-full max-w-2xl rounded-t-[2rem] md:rounded-[2.5rem] h-[80vh] flex flex-col relative shadow-2xl">
+            <button onClick={() => setSelectedPostForComments(null)} className="absolute top-6 right-6 text-zinc-600 hover:text-white"><X/></button>
+            <div className="p-8 border-b border-zinc-800/50">
+              <h2 className="text-xl font-black text-emerald-500 uppercase italic">Yorumlar</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-8 space-y-6">
               {comments.map((comment: any) => (
                 <div key={comment.id} className="group flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">@{comment.userEmail?.split('@')[0]}</span>
-                    {(comment.userId === user?.uid || isAdmin) && <button onClick={() => deleteDoc(doc(db, "comments", comment.id))} className="opacity-0 group-hover:opacity-100 text-zinc-700 hover:text-red-500 transition-all"><Trash2 size={14}/></button>}
+                    {(comment.userId === user?.uid || isAdmin) && <button onClick={() => deleteDoc(doc(db, "comments", comment.id))} className="text-zinc-700 hover:text-red-500"><Trash2 size={14}/></button>}
                   </div>
                   <p className="text-zinc-300 text-sm bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800/50">{comment.text}</p>
                 </div>
@@ -237,7 +280,7 @@ export default function MultiUserBlog() {
             <div className="p-6 bg-zinc-900/20 border-t border-zinc-800/50">
               <div className="flex gap-3 bg-zinc-900 border border-zinc-800 p-2 rounded-2xl">
                 <input placeholder="Yorum yaz..." value={newComment} onChange={e=>setNewComment(e.target.value)} onKeyDown={e => e.key === 'Enter' && addComment()} className="flex-1 bg-transparent px-4 py-3 outline-none text-sm" />
-                <button disabled={commentLoading} onClick={addComment} className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-500 disabled:opacity-50">
+                <button disabled={commentLoading} onClick={addComment} className="bg-emerald-600 text-white p-3 rounded-xl">
                   {commentLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18}/>}
                 </button>
               </div>
@@ -248,16 +291,16 @@ export default function MultiUserBlog() {
 
       {editingPost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
-          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2.5rem] w-full max-w-2xl relative shadow-2xl">
-            <button onClick={() => setEditingPost(null)} className="absolute top-8 right-8 text-zinc-500 hover:text-white transition-colors z-10"><X size={24}/></button>
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2.5rem] w-full max-w-2xl relative">
+            <button onClick={() => setEditingPost(null)} className="absolute top-8 right-8 text-zinc-500 hover:text-white"><X size={24}/></button>
             <h2 className="text-2xl font-black mb-8 text-emerald-500 italic uppercase">Düzenle</h2>
             <div className="space-y-6">
-              <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none text-white font-bold" />
-              <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none text-white leading-relaxed" rows={6} />
+              <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none" />
+              <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl outline-none" rows={6} />
               <button onClick={async () => {
                 await updateDoc(doc(db, "posts", editingPost.id), { title: editingPost.title, content: editingPost.content });
                 setEditingPost(null);
-              }} className="w-full bg-emerald-600 py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg">Uygula</button>
+              }} className="w-full bg-emerald-600 py-5 rounded-2xl font-black uppercase text-xs">Uygula</button>
             </div>
           </div>
         </div>
