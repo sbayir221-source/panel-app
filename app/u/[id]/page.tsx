@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, query, where, onSnapshot, doc, setDoc } from "firebase/firestore";
+import { db, auth } from "@/lib/firebase";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { useParams, useRouter } from "next/navigation";
-import { Calendar, ArrowLeft, Heart, MessageCircle, FileText } from "lucide-react";
+import { Calendar, ArrowLeft, Heart, MessageCircle, FileText, User as UserIcon, LogOut, X } from "lucide-react";
 
 const parseBBCode = (text: string = "") => {
   let html = text
@@ -17,28 +18,63 @@ const parseBBCode = (text: string = "") => {
 
 export default function UserProfile() {
   const params = useParams();
-  
-  // profileId'nin her zaman bir string olacağını garanti ediyoruz
-  const profileId: string = (params?.id as string) || 
-    (typeof window !== "undefined" ? window.location.pathname.split("/").pop() || "" : "");
-  
   const router = useRouter();
+  
+  // URL'den ID'yi çekme garantisi (Sonsuz yüklenmeyi çözen kısım)
+  const [profileId, setProfileId] = useState<string>("");
+
+  // Aktif Giriş Yapan Kullanıcı State'leri
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [myProfile, setMyProfile] = useState({ nickname: "", bio: "" });
+  const [showProfileModal, setShowProfileModal] = useState(false);
+
+  // Profil Sahibi State'leri
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [profileData, setProfileData] = useState<any>(null); 
   const [loading, setLoading] = useState(true);
   const [siteSettings, setSiteSettings] = useState<any>({});
 
+  // 1. URL'deki ID'yi her ne olursa olsun yakala
+  useEffect(() => {
+    if (params?.id) {
+      setProfileId(params.id as string);
+    } else if (typeof window !== "undefined") {
+      // Next.js params'ı kaçırırsa tarayıcı URL'sini parçala (/u/ID yapısından ID'yi al)
+      const pathSegments = window.location.pathname.split("/");
+      const idFromPath = pathSegments[pathSegments.length - 1];
+      if (idFromPath && idFromPath !== "u") {
+        setProfileId(idFromPath);
+      }
+    }
+  }, [params]);
+
+  // 2. Aktif Kullanıcı Kontrolü
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (u) => { 
+      setCurrentUser(u); 
+    });
+    return () => unsubAuth();
+  }, []);
+
+  // 3. Aktif Kullanıcının Kendi Profil Verileri (Ayarlar İçin)
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubMyProf = onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
+      if (snap.exists()) setMyProfile(snap.data() as any);
+    });
+    return () => unsubMyProf();
+  }, [currentUser]);
+
+  // 4. Profil Sayfası Verileri (profileId kesinleştiğinde tetiklenir)
   useEffect(() => {
     if (!profileId) return;
 
     setLoading(true);
 
-    // 1. Site Temasını Al
     const unsubSettings = onSnapshot(doc(db, "config", "site"), (docSnap) => {
       if (docSnap.exists()) setSiteSettings(docSnap.data());
     });
 
-    // 2. Profil Bilgilerini Çek (Nick ve Bio)
     const unsubProfile = onSnapshot(doc(db, "users", profileId), (docSnap) => {
       if (docSnap.exists()) {
         setProfileData(docSnap.data());
@@ -47,7 +83,6 @@ export default function UserProfile() {
       }
     });
 
-    // 3. Kullanıcının Yazılarını Çek
     const q = query(collection(db, "posts"), where("userId", "==", profileId));
     const unsubPosts = onSnapshot(q, (snap) => {
       const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
@@ -62,24 +97,54 @@ export default function UserProfile() {
     return () => { unsubSettings(); unsubProfile(); unsubPosts(); };
   }, [profileId]);
 
+  // Profil Düzenlemeyi Kaydetme Fonksiyonu
+  const saveMyProfile = async () => {
+    if (!currentUser || !myProfile.nickname.trim()) {
+      alert("Hata: Kullanıcı adı boş bırakılamaz!");
+      return;
+    }
+    try {
+      await setDoc(doc(db, "users", currentUser.uid), {
+        nickname: myProfile.nickname.trim().replace(/\s+/g, '_').toLowerCase(),
+        bio: myProfile.bio.trim()
+      }, { merge: true });
+      setShowProfileModal(false);
+      alert("Profil güncellendi! ✨");
+    } catch (e) { alert("Hata oluştu."); }
+  };
+
   const themeColor = siteSettings.accentColor || "emerald";
   const themeText = `text-${themeColor}-500`;
   const themeBg = `bg-${themeColor}-600`;
   const themeBgTint = `bg-${themeColor}-500/5`;
 
-  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Profil Yükleniyor...</div>;
+  if (loading || !profileId) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Profil Verileri Hazırlanıyor...</div>;
 
-  // Maskeleme kuralları - Güvenli hale getirildi
-  const displayNickname = profileData?.nickname || "yazar_" + (profileId ? profileId.substring(0, 5) : "anon");
+  const displayNickname = profileData?.nickname || "yazar_" + profileId.substring(0, 5);
   const displayBio = profileData?.bio || "Bu yazar henüz hakkında bir yazı eklememiş.";
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-zinc-500/30">
-      <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50 h-16 flex items-center px-6 gap-4">
-        <button onClick={() => window.location.href = "/"} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors text-zinc-400 hover:text-white">
-          <ArrowLeft size={20} />
-        </button>
-        <div className="font-black text-sm uppercase tracking-widest truncate">@{displayNickname} Profili</div>
+      {/* NAVBAR */}
+      <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-b-zinc-800/50 h-16 flex items-center px-6 justify-between">
+        <div className="flex items-center gap-4">
+          <button onClick={() => window.location.href = "/"} className="p-2 hover:bg-zinc-800 rounded-xl transition-colors text-zinc-400 hover:text-white">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="font-black text-sm uppercase tracking-widest truncate">@{displayNickname}</div>
+        </div>
+
+        {currentUser && (
+          <div className="flex items-center gap-3">
+            <button onClick={() => window.location.href = "/"} className="text-zinc-400 hover:text-white flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-zinc-900 border border-zinc-800 px-3.5 py-1.5 rounded-xl transition-all">
+              Ana Sayfa
+            </button>
+            <button onClick={() => setShowProfileModal(true)} className="text-zinc-400 hover:text-white flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl transition-all">
+              <UserIcon size={14}/> Ayarlar
+            </button>
+            <button onClick={() => { signOut(auth); window.location.href = "/"; }} className="text-zinc-500 hover:text-red-400 pl-1"><LogOut size={18}/></button>
+          </div>
+        )}
       </nav>
 
       <main className="max-w-4xl mx-auto px-6 py-12">
@@ -132,6 +197,27 @@ export default function UserProfile() {
           )}
         </div>
       </main>
+
+      {/* PROFİL AYARLARI MODALI */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+          <div className="bg-[#0c0c0e] border border-zinc-800 p-8 rounded-[2.5rem] w-full max-w-md relative shadow-2xl">
+            <button onClick={() => setShowProfileModal(false)} className="absolute top-8 right-8 text-zinc-500 hover:text-white"><X size={20}/></button>
+            <h2 className={`text-xl font-black mb-6 uppercase italic tracking-tighter ${themeText}`}>Profilini Düzenle</h2>
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-2">Kullanıcı Adı (Nick)</label>
+                <input placeholder="örn: chloe_martin" value={myProfile.nickname} onChange={e => setMyProfile({...myProfile, nickname: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none text-white font-bold" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block mb-2">Hakkında (Bio)</label>
+                <textarea placeholder="Kendinden bahset..." value={myProfile.bio} onChange={e => setMyProfile({...myProfile, bio: e.target.value})} className="w-full bg-zinc-900 border border-zinc-800 p-4 rounded-xl outline-none text-white text-sm resize-none" rows={3} />
+              </div>
+              <button onClick={saveMyProfile} className={`w-full ${themeBg} py-4 rounded-xl font-black text-xs uppercase tracking-widest text-white shadow-xl`}>Değişiklikleri Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
