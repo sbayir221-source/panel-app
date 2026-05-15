@@ -105,7 +105,7 @@ export default function UserProfile() {
   const themeBgTint = `bg-${themeColor}-500/5`;
   const themeBorder = `border-${themeColor}-500`;
 
-  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Profil Yükleniyor...</div>;
+  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Bakım Modu</div>;
 
   const displayNickname = profileData?.nickname || "yazar_" + (profileId ? profileId.substring(0, 5) : "anon");
   const displayBio = profileData?.bio || "Bu yazar henüz hakkında bir yazı eklememiş.";
