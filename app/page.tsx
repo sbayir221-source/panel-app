@@ -19,7 +19,7 @@ import {
   User 
 } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
-import { Trash2, Plus, Calendar, LogOut, PenTool, User as UserIcon, Google as GoogleIcon } from "lucide-react";
+import { Trash2, Plus, Calendar, LogOut, PenTool, User as UserIcon } from "lucide-react";
 
 type BlogPost = {
   id: string;
