@@ -6,9 +6,9 @@ import {
   addDoc,
   deleteDoc,
   doc,
+  updateDoc, // Güncelleme için yeni eklendi
   onSnapshot,
   query,
-  orderBy,
   where,
 } from "firebase/firestore";
 import { 
@@ -19,7 +19,7 @@ import {
   User 
 } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
-import { Trash2, Plus, Calendar, LogOut, PenTool, User as UserIcon } from "lucide-react";
+import { Trash2, Plus, Calendar, LogOut, PenTool, User as UserIcon, X, Save } from "lucide-react";
 
 type BlogPost = {
   id: string;
@@ -27,16 +27,26 @@ type BlogPost = {
   content: string;
   category: string;
   createdAt: number;
-  userId: string; // Yazının kime ait olduğunu tutacağız
+  userId: string;
 };
+
+const categories = ["Genel", "Teknoloji", "Yaşam", "Yazılım"];
 
 export default function MultiUserBlog() {
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Yeni yazı ekleme stateleri
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("Genel");
-  const [loading, setLoading] = useState(true);
+
+  // Düzenleme (Modal) stateleri
+  const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editCategory, setEditCategory] = useState("Genel");
 
   // 🔐 KULLANICI DURUMUNU TAKİP ET
   useEffect(() => {
@@ -54,13 +64,17 @@ export default function MultiUserBlog() {
       return;
     }
 
+    // orderBy şimdilik kapalı, indeks sorunu olmaması için
     const q = query(
       collection(db, "posts"),
-      where("userId", "==", user.uid), // Kritik nokta: Sadece benimkiler!
+      where("userId", "==", user.uid)
     );
 
     const unsubPosts = onSnapshot(q, (snap) => {
-      setPosts(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+      // Yazıları tarihe göre manuel sıralıyoruz (En yeni en üstte)
+      const fetchedPosts = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      fetchedPosts.sort((a, b) => b.createdAt - a.createdAt);
+      setPosts(fetchedPosts);
     });
 
     return () => unsubPosts();
@@ -82,14 +96,39 @@ export default function MultiUserBlog() {
       content,
       category,
       createdAt: Date.now(),
-      userId: user.uid, // Yazıyı kullanıcının kimliğiyle mühürle
+      userId: user.uid,
     });
     setTitle("");
     setContent("");
   };
 
-  const deletePost = async (id: string) => {
-    await deleteDoc(doc(db, "posts", id));
+  const deletePost = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Karta tıklama olayını durdurur, sadece siler
+    if (confirm("Bu yazıyı silmek istediğine emin misin?")) {
+      await deleteDoc(doc(db, "posts", id));
+    }
+  };
+
+  // Düzenleme penceresini aç
+  const openEditModal = (post: BlogPost) => {
+    setEditingPost(post);
+    setEditTitle(post.title);
+    setEditContent(post.content);
+    setEditCategory(post.category);
+  };
+
+  // Değişiklikleri Firebase'e kaydet
+  const saveEditedPost = async () => {
+    if (!editingPost || !editTitle.trim() || !editContent.trim()) return;
+    
+    const postRef = doc(db, "posts", editingPost.id);
+    await updateDoc(postRef, {
+      title: editTitle,
+      content: editContent,
+      category: editCategory,
+    });
+    
+    setEditingPost(null); // Modalı kapat
   };
 
   if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-500">Yükleniyor...</div>;
@@ -116,28 +155,22 @@ export default function MultiUserBlog() {
               </button>
             </div>
           ) : (
-            <button 
-              onClick={login}
-              className="bg-white text-black px-4 py-2 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-all flex items-center gap-2"
-            >
+            <button onClick={login} className="bg-white text-black px-4 py-2 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-all">
               Google ile Giriş
             </button>
           )}
         </div>
       </nav>
 
-      <main className="max-w-5xl mx-auto px-6 pt-12">
+      <main className="max-w-5xl mx-auto px-6 pt-12 relative">
         {!user ? (
-          /* GİRİŞ YAPILMAMIŞSA GÖSTERİLECEK EKRAN */
           <div className="text-center py-20">
             <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter">KENDİ BLOGUNU OLUŞTUR.</h1>
-            <p className="text-zinc-500 mb-10 max-w-lg mx-auto">Hemen giriş yap ve sadece senin görebileceğin, sana özel yazılarını yazmaya baş.</p>
-            <button onClick={login} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-4 rounded-2xl font-bold text-lg transition-all active:scale-95 shadow-xl shadow-emerald-900/20">
+            <button onClick={login} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl shadow-emerald-900/20">
               Hemen Başla
             </button>
           </div>
         ) : (
-          /* GİRİŞ YAPILMIŞSA PANEL VE YAZILAR */
           <>
             <div className="mb-16 bg-zinc-900/50 border border-zinc-800 p-6 rounded-3xl shadow-2xl">
               <div className="flex items-center gap-2 mb-6 text-emerald-400 font-medium">
@@ -157,12 +190,18 @@ export default function MultiUserBlog() {
                   onChange={(e) => setContent(e.target.value)}
                   className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all resize-none"
                 />
-                <button 
-                  onClick={addPost}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                >
-                  <Plus size={20} /> Kaydet
-                </button>
+                <div className="flex justify-between items-center">
+                  <select 
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none"
+                  >
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button onClick={addPost} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded-xl transition-all flex items-center gap-2">
+                    <Plus size={20} /> Kaydet
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -172,10 +211,17 @@ export default function MultiUserBlog() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {posts.map((post) => (
-                <article key={post.id} className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-6 hover:border-zinc-700 transition-all group">
+                <article 
+                  key={post.id} 
+                  onClick={() => openEditModal(post)} // Karta tıklayınca modalı aç
+                  className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-6 hover:border-zinc-700 transition-all group cursor-pointer hover:bg-zinc-900/60"
+                >
                   <div className="flex justify-between items-start mb-4">
                     <span className="text-[10px] font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded text-zinc-500">{post.category}</span>
-                    <button onClick={() => deletePost(post.id)} className="text-zinc-700 hover:text-red-500 transition-colors">
+                    <button 
+                      onClick={(e) => deletePost(e, post.id)} // Sadece bu butona tıklanınca sil
+                      className="text-zinc-700 hover:text-red-500 transition-colors"
+                    >
                       <Trash2 size={18} />
                     </button>
                   </div>
@@ -187,11 +233,57 @@ export default function MultiUserBlog() {
                 </article>
               ))}
             </div>
-            
-            {posts.length === 0 && <div className="text-center py-10 text-zinc-600">Henüz bir yazın yok.</div>}
           </>
         )}
       </main>
+
+      {/* DÜZENLEME MODALI (Açılır Pencere) */}
+      {editingPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 p-6 md:p-8 rounded-3xl w-full max-w-2xl shadow-2xl relative animate-in zoom-in-95 duration-200">
+            
+            {/* Kapat Butonu */}
+            <button 
+              onClick={() => setEditingPost(null)}
+              className="absolute top-6 right-6 text-zinc-500 hover:text-white transition-colors bg-zinc-800 p-2 rounded-full"
+            >
+              <X size={20} />
+            </button>
+
+            <h2 className="text-2xl font-bold mb-6 pr-10 text-emerald-400">Yazıyı Düzenle</h2>
+            
+            <div className="space-y-4">
+              <input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all text-xl font-semibold"
+              />
+              <textarea
+                rows={8}
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all resize-none leading-relaxed"
+              />
+              <div className="flex justify-between items-center pt-4 border-t border-zinc-800/50">
+                <select 
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none"
+                >
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button 
+                  onClick={saveEditedPost} 
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20"
+                >
+                  <Save size={20} /> Değişiklikleri Kaydet
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
