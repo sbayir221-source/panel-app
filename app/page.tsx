@@ -1,289 +1,167 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  collection,
-  addDoc,
-  deleteDoc,
-  doc,
-  updateDoc, // Güncelleme için yeni eklendi
-  onSnapshot,
-  query,
-  where,
-} from "firebase/firestore";
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  signOut, 
-  User 
-} from "firebase/auth";
+import { collection, addDoc, deleteDoc, doc, updateDoc, onSnapshot, query, where, getDocs } from "firebase/firestore";
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
-import { Trash2, Plus, Calendar, LogOut, PenTool, User as UserIcon, X, Save } from "lucide-react";
+import { Trash2, Plus, Calendar, LogOut, PenTool, User as UserIcon, X, Save, Rss, Copy, Check } from "lucide-react";
 
-type BlogPost = {
-  id: string;
-  title: string;
-  content: string;
-  category: string;
-  createdAt: number;
-  userId: string;
-};
-
+type BlogPost = { id: string; title: string; content: string; category: string; createdAt: number; userId: string; };
 const categories = ["Genel", "Teknoloji", "Yaşam", "Yazılım"];
 
 export default function MultiUserBlog() {
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [feedPosts, setFeedPosts] = useState<BlogPost[]>([]);
+  const [activeTab, setActiveTab] = useState<"my" | "feed">("my");
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-  // Yeni yazı ekleme stateleri
+  // Form stateleri
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("Genel");
-
-  // Düzenleme (Modal) stateleri
   const [editingPost, setEditingPost] = useState<BlogPost | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editContent, setEditContent] = useState("");
-  const [editCategory, setEditCategory] = useState("Genel");
 
-  // 🔐 KULLANICI DURUMUNU TAKİP ET
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    const unsubAuth = onAuthStateChanged(auth, (u) => { setUser(u); setLoading(false); });
     return () => unsubAuth();
   }, []);
 
-  // 📝 SADECE KULLANICIYA AİT YAZILARI ÇEK
+  // Yazılarım ve Akış Verilerini Çek
   useEffect(() => {
-    if (!user) {
-      setPosts([]);
-      return;
-    }
+    if (!user) return;
 
-    // orderBy şimdilik kapalı, indeks sorunu olmaması için
-    const q = query(
-      collection(db, "posts"),
-      where("userId", "==", user.uid)
-    );
-
-    const unsubPosts = onSnapshot(q, (snap) => {
-      // Yazıları tarihe göre manuel sıralıyoruz (En yeni en üstte)
-      const fetchedPosts = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
-      fetchedPosts.sort((a, b) => b.createdAt - a.createdAt);
-      setPosts(fetchedPosts);
+    // 1. Yazılarım
+    const qMy = query(collection(db, "posts"), where("userId", "==", user.uid));
+    const unsubMy = onSnapshot(qMy, (snap) => {
+      const fetched = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      fetched.sort((a, b) => b.createdAt - a.createdAt);
+      setPosts(fetched);
     });
 
-    return () => unsubPosts();
+    // 2. Akış (Takip edilenler)
+    const fetchFeed = async () => {
+      const qFollows = query(collection(db, "follows"), where("followerId", "==", user.uid));
+      const followSnap = await getDocs(qFollows);
+      const followingIds = followSnap.docs.map(d => d.data().followingId);
+
+      if (followingIds.length > 0) {
+        // Takip edilenlerin yazılarını getir
+        const qFeed = query(collection(db, "posts"), where("userId", "in", followingIds));
+        onSnapshot(qFeed, (snap) => {
+          const fetched = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+          fetched.sort((a, b) => b.createdAt - a.createdAt);
+          setFeedPosts(fetched);
+        });
+      }
+    };
+    fetchFeed();
+
+    return () => unsubMy();
   }, [user]);
 
-  const login = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+  const copyProfileLink = () => {
+    if (!user) return;
+    const link = `${window.location.origin}/u/${user.uid}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const logout = async () => {
-    await signOut(auth);
-  };
-
+  // ... (addPost, deletePost, saveEditedPost fonksiyonları aynı kalıyor)
   const addPost = async () => {
     if (!title.trim() || !content.trim() || !user) return;
-    await addDoc(collection(db, "posts"), {
-      title,
-      content,
-      category,
-      createdAt: Date.now(),
-      userId: user.uid,
-    });
-    setTitle("");
-    setContent("");
+    await addDoc(collection(db, "posts"), { title, content, category, createdAt: Date.now(), userId: user.uid });
+    setTitle(""); setContent("");
   };
 
-  const deletePost = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Karta tıklama olayını durdurur, sadece siler
-    if (confirm("Bu yazıyı silmek istediğine emin misin?")) {
-      await deleteDoc(doc(db, "posts", id));
-    }
+  const deletePost = async (e: any, id: string) => {
+    e.stopPropagation();
+    if (confirm("Silinsin mi?")) await deleteDoc(doc(db, "posts", id));
   };
 
-  // Düzenleme penceresini aç
-  const openEditModal = (post: BlogPost) => {
-    setEditingPost(post);
-    setEditTitle(post.title);
-    setEditContent(post.content);
-    setEditCategory(post.category);
-  };
-
-  // Değişiklikleri Firebase'e kaydet
   const saveEditedPost = async () => {
-    if (!editingPost || !editTitle.trim() || !editContent.trim()) return;
-    
-    const postRef = doc(db, "posts", editingPost.id);
-    await updateDoc(postRef, {
-      title: editTitle,
-      content: editContent,
-      category: editCategory,
-    });
-    
-    setEditingPost(null); // Modalı kapat
+    if (!editingPost) return;
+    await updateDoc(doc(db, "posts", editingPost.id), { title, content, category });
+    setEditingPost(null);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-500">Yükleniyor...</div>;
+  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 uppercase text-xs tracking-widest">Sistem Hazırlanıyor...</div>;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans pb-20">
-      
-      {/* NAVBAR */}
-      <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 font-bold text-xl tracking-tighter">
-            <div className="w-8 h-8 bg-emerald-500 text-black flex items-center justify-center rounded-lg italic">B</div>
-            Bayir's
-          </div>
-          
-          {user ? (
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm text-zinc-400 bg-zinc-900 px-3 py-1.5 rounded-full border border-zinc-800">
-                <img src={user.photoURL || ""} alt="" className="w-5 h-5 rounded-full" />
-                <span className="hidden md:inline">{user.displayName}</span>
-              </div>
-              <button onClick={logout} className="text-zinc-500 hover:text-red-400 transition-colors">
-                <LogOut size={20} />
-              </button>
-            </div>
-          ) : (
-            <button onClick={login} className="bg-white text-black px-4 py-2 rounded-xl text-sm font-bold hover:bg-zinc-200 transition-all">
-              Google ile Giriş
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 pb-20">
+      <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50 h-16 flex items-center px-6 justify-between">
+        <div className="font-black text-xl italic tracking-tighter">BAYIR'S</div>
+        {user && (
+          <div className="flex items-center gap-4">
+            <button onClick={copyProfileLink} className="text-xs bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-lg flex items-center gap-2 hover:bg-zinc-800 transition-all">
+              {copied ? <><Check size={14} className="text-emerald-500" /> Kopyalandı</> : <><Copy size={14} /> Profili Paylaş</>}
             </button>
-          )}
-        </div>
+            <button onClick={() => signOut(auth)} className="text-zinc-500 hover:text-red-400"><LogOut size={20} /></button>
+          </div>
+        )}
       </nav>
 
-      <main className="max-w-5xl mx-auto px-6 pt-12 relative">
+      <main className="max-w-4xl mx-auto px-6 pt-12">
         {!user ? (
           <div className="text-center py-20">
-            <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter">KENDİ BLOGUNU OLUŞTUR.</h1>
-            <button onClick={login} className="bg-emerald-600 hover:bg-emerald-500 px-8 py-4 rounded-2xl font-bold text-lg transition-all shadow-xl shadow-emerald-900/20">
-              Hemen Başla
-            </button>
+            <h1 className="text-6xl font-black mb-8 tracking-tighter">DÜNYAYA ANLAT.</h1>
+            <button onClick={() => signInWithPopup(auth, new GoogleAuthProvider())} className="bg-white text-black px-10 py-4 rounded-2xl font-bold">Google ile Başla</button>
           </div>
         ) : (
           <>
-            <div className="mb-16 bg-zinc-900/50 border border-zinc-800 p-6 rounded-3xl shadow-2xl">
-              <div className="flex items-center gap-2 mb-6 text-emerald-400 font-medium">
-                <PenTool size={20} /> Yeni Bir Şeyler Paylaş
-              </div>
-              <div className="space-y-4">
-                <input
-                  placeholder="Başlık..."
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all"
-                />
-                <textarea
-                  placeholder="İçerik..."
-                  rows={4}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all resize-none"
-                />
-                <div className="flex justify-between items-center">
-                  <select 
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none"
-                  >
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <button onClick={addPost} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded-xl transition-all flex items-center gap-2">
-                    <Plus size={20} /> Kaydet
-                  </button>
-                </div>
-              </div>
+            {/* YAZI EKLEME FORMU AYNI KALIYOR */}
+            <div className="mb-12 bg-zinc-900/40 border border-zinc-800/50 p-6 rounded-3xl">
+               <input placeholder="Başlık" value={title} onChange={e=>setTitle(e.target.value)} className="w-full bg-transparent text-2xl font-bold mb-4 outline-none placeholder:text-zinc-800" />
+               <textarea placeholder="Neler oluyor?" value={content} onChange={e=>setContent(e.target.value)} className="w-full bg-transparent mb-4 outline-none resize-none placeholder:text-zinc-800" rows={3} />
+               <div className="flex justify-between items-center">
+                 <select value={category} onChange={e=>setCategory(e.target.value)} className="bg-zinc-800 text-xs px-3 py-1.5 rounded-lg outline-none uppercase font-bold tracking-widest text-zinc-400">
+                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                 </select>
+                 <button onClick={addPost} className="bg-emerald-600 px-6 py-2 rounded-xl font-bold text-sm">Paylaş</button>
+               </div>
             </div>
 
-            <h2 className="text-2xl font-bold mb-8 flex items-center gap-2">
-              <UserIcon size={24} className="text-zinc-500" /> Yazıların
-            </h2>
+            {/* SEKME SEÇİCİ */}
+            <div className="flex gap-8 mb-8 border-b border-zinc-800/50">
+              <button onClick={() => setActiveTab("my")} className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all ${activeTab === "my" ? "text-emerald-500 border-b-2 border-emerald-500" : "text-zinc-600"}`}>Yazılarım</button>
+              <button onClick={() => setActiveTab("feed")} className={`pb-4 text-sm font-bold tracking-widest uppercase transition-all ${activeTab === "feed" ? "text-emerald-500 border-b-2 border-emerald-500" : "text-zinc-600"}`}>Akış (Takip)</button>
+            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {posts.map((post) => (
-                <article 
-                  key={post.id} 
-                  onClick={() => openEditModal(post)} // Karta tıklayınca modalı aç
-                  className="bg-zinc-900/30 border border-zinc-800/50 rounded-2xl p-6 hover:border-zinc-700 transition-all group cursor-pointer hover:bg-zinc-900/60"
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="text-[10px] font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded text-zinc-500">{post.category}</span>
-                    <button 
-                      onClick={(e) => deletePost(e, post.id)} // Sadece bu butona tıklanınca sil
-                      className="text-zinc-700 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+            {/* İÇERİK LİSTESİ */}
+            <div className="grid grid-cols-1 gap-6">
+              {(activeTab === "my" ? posts : feedPosts).map(post => (
+                <article key={post.id} onClick={() => activeTab === "my" && setEditingPost(post)} className={`bg-zinc-900/20 border border-zinc-800/50 p-6 rounded-2xl transition-all ${activeTab === "my" ? "cursor-pointer hover:bg-zinc-900/40" : ""}`}>
+                  <div className="flex justify-between mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500/50">{post.category}</span>
+                    {activeTab === "my" && <button onClick={(e) => deletePost(e, post.id)} className="text-zinc-800 hover:text-red-500"><Trash2 size={16} /></button>}
                   </div>
-                  <h3 className="text-xl font-bold mb-3">{post.title}</h3>
-                  <p className="text-zinc-500 text-sm line-clamp-3 mb-6">{post.content}</p>
-                  <div className="text-[10px] text-zinc-600 flex items-center gap-1">
-                    <Calendar size={12} /> {new Date(post.createdAt).toLocaleDateString('tr-TR')}
-                  </div>
+                  <h3 className="text-xl font-bold mb-2">{post.title}</h3>
+                  <p className="text-zinc-500 text-sm line-clamp-2">{post.content}</p>
                 </article>
               ))}
+              {(activeTab === "feed" && feedPosts.length === 0) && <div className="text-center py-20 text-zinc-700 text-xs uppercase tracking-widest italic">Henüz takip ettiğin kimse yok veya arkadaşların bir şey paylaşmamış.</div>}
             </div>
           </>
         )}
       </main>
 
-      {/* DÜZENLEME MODALI (Açılır Pencere) */}
+      {/* DÜZENLEME MODALI (Modal kodları buraya gelecek - Bir önceki kodun aynısı) */}
       {editingPost && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-zinc-900 border border-zinc-800 p-6 md:p-8 rounded-3xl w-full max-w-2xl shadow-2xl relative animate-in zoom-in-95 duration-200">
-            
-            {/* Kapat Butonu */}
-            <button 
-              onClick={() => setEditingPost(null)}
-              className="absolute top-6 right-6 text-zinc-500 hover:text-white transition-colors bg-zinc-800 p-2 rounded-full"
-            >
-              <X size={20} />
-            </button>
-
-            <h2 className="text-2xl font-bold mb-6 pr-10 text-emerald-400">Yazıyı Düzenle</h2>
-            
-            <div className="space-y-4">
-              <input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all text-xl font-semibold"
-              />
-              <textarea
-                rows={8}
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 outline-none focus:border-emerald-500/50 transition-all resize-none leading-relaxed"
-              />
-              <div className="flex justify-between items-center pt-4 border-t border-zinc-800/50">
-                <select 
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none"
-                >
-                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <button 
-                  onClick={saveEditedPost} 
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-900/20"
-                >
-                  <Save size={20} /> Değişiklikleri Kaydet
-                </button>
-              </div>
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl w-full max-w-2xl relative">
+            <button onClick={() => setEditingPost(null)} className="absolute top-6 right-6 text-zinc-500"><X /></button>
+            <h2 className="text-2xl font-bold mb-6 text-emerald-500">Yazıyı Düzenle</h2>
+            <input value={editingPost.title} onChange={e => setEditingPost({...editingPost, title: e.target.value})} className="w-full bg-zinc-800 p-4 rounded-xl mb-4 outline-none" />
+            <textarea value={editingPost.content} onChange={e => setEditingPost({...editingPost, content: e.target.value})} className="w-full bg-zinc-800 p-4 rounded-xl mb-4 outline-none" rows={6} />
+            <button onClick={async () => {
+              await updateDoc(doc(db, "posts", editingPost.id), { title: editingPost.title, content: editingPost.content });
+              setEditingPost(null);
+            }} className="w-full bg-emerald-600 py-4 rounded-xl font-bold">Değişiklikleri Kaydet</button>
           </div>
         </div>
       )}
-
     </div>
   );
 }
