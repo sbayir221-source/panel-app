@@ -100,7 +100,39 @@ export default function MultiUserBlog() {
     } catch (e) {
       alert("Yazı paylaşılamadı!");
     }
-  };
+  const addPost = async () => {
+    // Boşluk kontrolü
+    if (!title.trim()) {
+      alert("Hata: Yazına bir başlık eklemelisin!");
+      return;
+    }
+    if (!content.trim()) {
+      alert("Hata: Yazı içeriği boş olamaz!");
+      return;
+    }
+    if (!user) return;
+
+    try {
+      await addDoc(collection(db, "posts"), { 
+          title: title.trim(), 
+          content: content.trim(), 
+          category, 
+          imageUrl: imageUrl || null, 
+          createdAt: Date.now(), 
+          userId: user.uid, 
+          userEmail: user.email, 
+          likes: []
+      });
+      // Başarılıysa temizle
+      setTitle(""); 
+      setContent(""); 
+      setImageUrl(""); 
+      setShowImageInput(false);
+      alert("Başarıyla paylaşıldı! ✨");
+    } catch (e) {
+      alert("Sistemsel bir hata oluştu, lütfen tekrar dene.");
+    }
+  };};
 
   const addComment = async () => {
     if (!newComment.trim() || !user || !selectedPostForComments) return;
