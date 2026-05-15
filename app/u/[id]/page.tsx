@@ -12,7 +12,6 @@ import {
   ImageIcon, Heart, MessageCircle, Send, Loader2, ShieldAlert, BarChart3, Settings
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import Link from "next/link"; // Next.js yönlendirme bileşeni eklendi
 
 const parseBBCode = (text: string = "") => {
   let html = text
@@ -37,11 +36,9 @@ export default function MultiUserBlog() {
   const [profiles, setProfiles] = useState<Record<string, any>>({}); 
   const [loading, setLoading] = useState(true);
   
-  // Profil Stateleri
   const [myProfile, setMyProfile] = useState({ nickname: "", bio: "" });
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // Dinamik Tema Ayarları
   const [siteSettings, setSiteSettings] = useState({
     siteName: "BAYIR'S",
     mainSlogan: "KEŞFET. PAYLAŞ.",
@@ -79,6 +76,11 @@ export default function MultiUserBlog() {
   };
 
   const theme = getThemeClasses(siteSettings.accentColor);
+
+  // Profil sayfasına kesin ve güvenli geçiş fonksiyonu
+  const goToProfile = (userId: string) => {
+    window.location.href = `/u/${userId}`;
+  };
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => { 
@@ -214,10 +216,9 @@ export default function MultiUserBlog() {
         </div>
         {user && (
           <div className="flex items-center gap-3">
-            {/* Canlı Profil Linki Eklendi */}
-            <Link href={`/u/${user.uid}`} className="text-zinc-400 hover:text-white flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-zinc-900 border border-zinc-800 px-3.5 py-1.5 rounded-xl transition-all">
+            <button onClick={() => goToProfile(user.uid)} className="text-zinc-400 hover:text-white flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-zinc-900 border border-zinc-800 px-3.5 py-1.5 rounded-xl transition-all">
               Profilim
-            </Link>
+            </button>
             <button onClick={() => setShowProfileModal(true)} className="text-zinc-400 hover:text-white flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-xl transition-all">
               <UserIcon size={14}/> Ayarlar
             </button>
@@ -328,11 +329,11 @@ export default function MultiUserBlog() {
                     return (
                       <article key={post.id} className="bg-zinc-900/20 border border-zinc-800/50 rounded-[3rem] overflow-hidden hover:bg-zinc-900/30 transition-all group">
                         
-                        {/* Resme Tıklayınca Profile Gitme (Next Link Yapısı) */}
+                        {/* Resme Tıklayınca Profile Gitme */}
                         {post.imageUrl && (
-                          <Link href={`/u/${post.userId}`} className="block w-full h-72 overflow-hidden border-b border-zinc-800/30">
+                          <div onClick={() => goToProfile(post.userId)} className="block w-full h-72 overflow-hidden border-b border-zinc-800/30 cursor-pointer">
                             <img src={post.imageUrl} className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500" alt="Cover" />
-                          </Link>
+                          </div>
                         )}
                         
                         <div className="p-8">
@@ -342,9 +343,9 @@ export default function MultiUserBlog() {
                           </div>
                           
                           {/* Başlığa Tıklayınca Profile Gitme */}
-                          <Link href={`/u/${post.userId}`} className="block">
+                          <div onClick={() => goToProfile(post.userId)} className="cursor-pointer">
                             <h3 className="text-2xl font-bold mb-4 group-hover:text-zinc-200 transition-colors">{post.title}</h3>
-                          </Link>
+                          </div>
                           
                           <div className="text-zinc-400 text-sm mb-8" dangerouslySetInnerHTML={parseBBCode(post.content)} />
                           
@@ -359,9 +360,9 @@ export default function MultiUserBlog() {
                             </div>
                             
                             {/* Yazara Tıklayınca Profile Gitme */}
-                            <Link href={`/u/${post.userId}`} className="text-[10px] font-black text-zinc-500 hover:text-white transition-colors uppercase tracking-wider cursor-pointer">
+                            <div onClick={() => goToProfile(post.userId)} className="text-[10px] font-black text-zinc-500 hover:text-white transition-colors uppercase tracking-wider cursor-pointer">
                               @{getUserDisplayName(post.userId)}
-                            </Link>
+                            </div>
                           </div>
                         </div>
                       </article>
