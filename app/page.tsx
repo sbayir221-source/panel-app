@@ -9,7 +9,7 @@ import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User 
 import { db, auth } from "@/lib/firebase";
 import { 
   Trash2, Plus, Calendar, LogOut, PenTool, 
-  User as UserIcon, X, Globe, UserPlus, UserCheck, Copy, Check 
+  User as UserIcon, X, Globe, UserPlus, UserCheck, Copy, Check, Rss 
 } from "lucide-react";
 
 type BlogPost = { 
