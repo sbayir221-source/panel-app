@@ -7,7 +7,6 @@ import {
 } from "firebase/firestore";
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, User } from "firebase/auth";
 import { db, auth } from "@/lib/firebase";
-// DOĞRU İTHALAT (lucide-react)
 import { 
   Trash2, Plus, Calendar, LogOut, User as UserIcon, X, Globe, 
   UserPlus, UserCheck, Copy, Check, Rss, Image as ImageIcon, 
@@ -15,7 +14,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-// --- BBCODE ÇÖZÜCÜ ---
 const parseBBCode = (text: string = "") => {
   let html = text
     .replace(/\[b\](.*?)\[\/b\]/g, "<strong>$1</strong>")
@@ -46,7 +44,6 @@ export default function MultiUserBlog() {
   const [showImageInput, setShowImageInput] = useState(false);
   const [editingPost, setEditingPost] = useState<any>(null);
 
-  // Yorum Stateleri
   const [selectedPostForComments, setSelectedPostForComments] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -63,19 +60,19 @@ export default function MultiUserBlog() {
     return () => unsubAuth();
   }, []);
 
+  // --- HATA VEREN KISIM DÜZELTİLDİ ---
   useEffect(() => {
     if (!user) return;
     const qAll = query(collection(db, "posts"), limit(100));
     const unsub = onSnapshot(qAll, (snap) => {
-      const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      all.sort((a:any, b:any) => b.createdAt - a.createdAt);
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as any)); // "as any" ile tip hatası engellendi
+      all.sort((a: any, b: any) => b.createdAt - a.createdAt);
       setExplorePosts(all);
-      setPosts(all.filter(p => p.userId === user.uid));
+      setPosts(all.filter((p: any) => p.userId === user.uid)); // p:any diyerek userId'yi tanıttık
     });
     return () => unsub();
   }, [user]);
 
-  // YORUM DİNLEYİCİ (Index hatası vermemesi için orderBy kaldırıldı)
   useEffect(() => {
     if (!selectedPostForComments) {
       setComments([]);
@@ -83,8 +80,8 @@ export default function MultiUserBlog() {
     }
     const qComments = query(collection(db, "comments"), where("postId", "==", selectedPostForComments.id));
     const unsubComments = onSnapshot(qComments, (snap) => {
-      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      fetched.sort((a:any, b:any) => a.createdAt - b.createdAt);
+      const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      fetched.sort((a: any, b: any) => a.createdAt - b.createdAt);
       setComments(fetched);
     });
     return () => unsubComments();
@@ -129,7 +126,7 @@ export default function MultiUserBlog() {
     <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans selection:bg-emerald-500/30">
       <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50 h-16 flex items-center px-6 justify-between">
         <div className="font-black text-xl italic text-emerald-500 cursor-pointer" onClick={() => router.push("/")}>BAYIR'S</div>
-        {user && <button onClick={() => signOut(auth)} className="text-zinc-500 hover:text-red-400"><LogOut size={20}/></button>}
+        {user && <button onClick={() => signOut(auth)} className="text-zinc-500 hover:text-red-400 transition-colors"><LogOut size={20}/></button>}
       </nav>
 
       <main className="max-w-4xl mx-auto px-6 pt-12">
@@ -144,7 +141,7 @@ export default function MultiUserBlog() {
              {showImageInput && <input placeholder="Kapak Resmi URL..." value={imageUrl} onChange={e=>setImageUrl(e.target.value)} className="w-full bg-zinc-800/50 border border-zinc-700 p-4 rounded-2xl mb-4 text-sm outline-none" />}
              <div className="flex justify-between items-center pt-6 border-t border-zinc-800/30">
                <button onClick={() => setShowImageInput(!showImageInput)} className={`p-2 rounded-xl ${imageUrl ? 'text-emerald-500 bg-emerald-500/10' : 'text-zinc-600'}`}><ImageIcon size={22}/></button>
-               <button onClick={addPost} className="bg-emerald-600 text-white px-10 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl">PAYLAŞ</button>
+               <button onClick={addPost} className="bg-emerald-600 text-white px-10 py-3 rounded-2xl font-black text-xs uppercase tracking-widest">PAYLAŞ</button>
              </div>
           </div>
         )}
@@ -155,7 +152,7 @@ export default function MultiUserBlog() {
         </div>
 
         <div className="grid grid-cols-1 gap-10">
-          {(activeTab === "my" ? posts : explorePosts).map((post:any) => {
+          {(activeTab === "my" ? posts : explorePosts).map((post: any) => {
             const isMyPost = post.userId === user?.uid;
             const hasLiked = post.likes?.includes(user?.uid);
             return (
