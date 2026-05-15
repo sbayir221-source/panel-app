@@ -1,7 +1,7 @@
-// NEXT.JS STATİK KİLİTLEMESİNİ KIRAN KRİTİK AYAR
-export const dynamic = "force-dynamic";
-
 "use client";
+
+// Next.js statik kilitlemesini kıran kural artık "use client" altında
+export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { collection, query, where, onSnapshot, doc, setDoc } from "firebase/firestore";
@@ -33,7 +33,7 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [siteSettings, setSiteSettings] = useState<any>({});
 
-  // URL Parametresini veya Tarayıcı Rotalarını Zorla Yakala
+  // URL Parametresini zorla yakala
   useEffect(() => {
     if (params?.id) {
       setProfileId(params.id as string);
@@ -61,11 +61,10 @@ export default function UserProfile() {
     return () => unsubMyProf();
   }, [currentUser]);
 
-  // Veritabanı Akışları
+  // Veritabanı akışları
   useEffect(() => {
     if (!profileId) return;
 
-    // Her ID değişiminde loading'i aktifleştirerek eski verilerin kalmasını önle
     setLoading(true);
 
     const unsubSettings = onSnapshot(doc(db, "config", "site"), (docSnap) => {
@@ -114,7 +113,6 @@ export default function UserProfile() {
   const themeBg = `bg-${themeColor}-600`;
   const themeBgTint = `bg-${themeColor}-500/5`;
 
-  // Eğer profil ID hala çözülemediyse yükleniyor yazmak yerine ana sayfaya güvenli yönlendir veya bekle
   if (!profileId) {
     return (
       <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center gap-4 text-zinc-600 font-black text-xs uppercase tracking-widest italic">
