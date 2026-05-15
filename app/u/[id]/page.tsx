@@ -1,3 +1,6 @@
+// NEXT.JS STATİK KİLİTLEMESİNİ KIRAN KRİTİK AYAR
+export const dynamic = "force-dynamic";
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -20,26 +23,21 @@ export default function UserProfile() {
   const params = useParams();
   const router = useRouter();
   
-  // URL'den ID'yi çekme garantisi (Sonsuz yüklenmeyi çözen kısım)
   const [profileId, setProfileId] = useState<string>("");
-
-  // Aktif Giriş Yapan Kullanıcı State'leri
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [myProfile, setMyProfile] = useState({ nickname: "", bio: "" });
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // Profil Sahibi State'leri
   const [userPosts, setUserPosts] = useState<any[]>([]);
   const [profileData, setProfileData] = useState<any>(null); 
   const [loading, setLoading] = useState(true);
   const [siteSettings, setSiteSettings] = useState<any>({});
 
-  // 1. URL'deki ID'yi her ne olursa olsun yakala
+  // URL Parametresini veya Tarayıcı Rotalarını Zorla Yakala
   useEffect(() => {
     if (params?.id) {
       setProfileId(params.id as string);
     } else if (typeof window !== "undefined") {
-      // Next.js params'ı kaçırırsa tarayıcı URL'sini parçala (/u/ID yapısından ID'yi al)
       const pathSegments = window.location.pathname.split("/");
       const idFromPath = pathSegments[pathSegments.length - 1];
       if (idFromPath && idFromPath !== "u") {
@@ -48,7 +46,6 @@ export default function UserProfile() {
     }
   }, [params]);
 
-  // 2. Aktif Kullanıcı Kontrolü
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => { 
       setCurrentUser(u); 
@@ -56,7 +53,6 @@ export default function UserProfile() {
     return () => unsubAuth();
   }, []);
 
-  // 3. Aktif Kullanıcının Kendi Profil Verileri (Ayarlar İçin)
   useEffect(() => {
     if (!currentUser) return;
     const unsubMyProf = onSnapshot(doc(db, "users", currentUser.uid), (snap) => {
@@ -65,10 +61,11 @@ export default function UserProfile() {
     return () => unsubMyProf();
   }, [currentUser]);
 
-  // 4. Profil Sayfası Verileri (profileId kesinleştiğinde tetiklenir)
+  // Veritabanı Akışları
   useEffect(() => {
     if (!profileId) return;
 
+    // Her ID değişiminde loading'i aktifleştirerek eski verilerin kalmasını önle
     setLoading(true);
 
     const unsubSettings = onSnapshot(doc(db, "config", "site"), (docSnap) => {
@@ -97,7 +94,6 @@ export default function UserProfile() {
     return () => { unsubSettings(); unsubProfile(); unsubPosts(); };
   }, [profileId]);
 
-  // Profil Düzenlemeyi Kaydetme Fonksiyonu
   const saveMyProfile = async () => {
     if (!currentUser || !myProfile.nickname.trim()) {
       alert("Hata: Kullanıcı adı boş bırakılamaz!");
@@ -110,7 +106,7 @@ export default function UserProfile() {
       }, { merge: true });
       setShowProfileModal(false);
       alert("Profil güncellendi! ✨");
-    } catch (e) { alert("Hata oluştu."); }
+    } catch (e) { alert("Hata oldu."); }
   };
 
   const themeColor = siteSettings.accentColor || "emerald";
@@ -118,7 +114,17 @@ export default function UserProfile() {
   const themeBg = `bg-${themeColor}-600`;
   const themeBgTint = `bg-${themeColor}-500/5`;
 
-  if (loading || !profileId) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Profil Verileri Hazırlanıyor...</div>;
+  // Eğer profil ID hala çözülemediyse yükleniyor yazmak yerine ana sayfaya güvenli yönlendir veya bekle
+  if (!profileId) {
+    return (
+      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center gap-4 text-zinc-600 font-black text-xs uppercase tracking-widest italic">
+        <span>Rota Doğrulanıyor...</span>
+        <button onClick={() => window.location.href = "/"} className="text-[10px] text-emerald-500 underline uppercase tracking-normal">Ana Sayfaya Dön</button>
+      </div>
+    );
+  }
+
+  if (loading) return <div className="min-h-screen bg-[#09090b] flex items-center justify-center text-zinc-600 font-black text-xs uppercase tracking-widest italic">Veriler Çekiliyor...</div>;
 
   const displayNickname = profileData?.nickname || "yazar_" + profileId.substring(0, 5);
   const displayBio = profileData?.bio || "Bu yazar henüz hakkında bir yazı eklememiş.";
