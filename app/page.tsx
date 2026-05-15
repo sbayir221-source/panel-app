@@ -7,172 +7,172 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  updateDoc,
   query,
   orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Trash2, Plus, CheckCircle2, Circle, Menu, X, BookOpen, CheckSquare } from "lucide-react"; // İkonlar için
+import { Trash2, Plus, Calendar, Clock, LayoutGrid, PenTool, Eye, User } from "lucide-react";
 
-type Note = { id: string; text: string };
-type Task = { id: string; text: string; done: boolean; category: string };
+type BlogPost = {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  createdAt: number;
+};
 
-const categories = ["Genel", "Alınacaklar", "Yapılacaklar", "Kişisel"];
+const categories = ["Teknoloji", "Yaşam", "Yazılım", "Genel"];
 
-export default function Page() {
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [noteInput, setNoteInput] = useState("");
-  const [taskInput, setTaskInput] = useState("");
-
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [view, setView] = useState("notes");
-  const [selectedCategory, setSelectedCategory] = useState("Genel");
+export default function BlogPage() {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [category, setCategory] = useState("Genel");
+  const [isAdmin, setIsAdmin] = useState(false); // Admin modu kontrolü
 
   useEffect(() => {
-    const qNotes = query(collection(db, "notes"), orderBy("createdAt", "desc"));
-    const qTasks = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
-
-    const unsubNotes = onSnapshot(qNotes, (snap) => {
-      setNotes(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setPosts(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
     });
-
-    const unsubTasks = onSnapshot(qTasks, (snap) => {
-      setTasks(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
-    });
-
-    return () => {
-      unsubNotes();
-      unsubTasks();
-    };
+    return () => unsub();
   }, []);
 
-  const addNote = async () => {
-    if (!noteInput.trim()) return;
-    await addDoc(collection(db, "notes"), { text: noteInput, createdAt: Date.now() });
-    setNoteInput("");
-  };
-
-  const addTask = async () => {
-    if (!taskInput.trim()) return;
-    await addDoc(collection(db, "tasks"), {
-      text: taskInput,
-      done: false,
-      category: selectedCategory,
+  const addPost = async () => {
+    if (!title.trim() || !content.trim()) return;
+    await addDoc(collection(db, "posts"), {
+      title,
+      content,
+      category,
       createdAt: Date.now(),
     });
-    setTaskInput("");
+    setTitle("");
+    setContent("");
   };
 
-  const toggleTask = async (task: Task) => {
-    await updateDoc(doc(db, "tasks", task.id), { done: !task.done });
-  };
-
-  const deleteNote = async (id: string) => {
-    await deleteDoc(doc(db, "notes", id));
-  };
-
-  const deleteTask = async (id: string) => {
-    await deleteDoc(doc(db, "tasks", id));
+  const deletePost = async (id: string) => {
+    if (confirm("Bu yazıyı silmek istediğine emin misin?")) {
+      await deleteDoc(doc(db, "posts", id));
+    }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex font-sans">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 font-sans pb-20">
       
-      {/* SIDEBAR */}
-      <div className={`${menuOpen ? "w-72" : "w-20"} transition-all duration-300 bg-zinc-900/50 backdrop-blur-xl border-r border-zinc-800 p-4 flex flex-col items-center`}>
-        <button 
-          onClick={() => setMenuOpen(!menuOpen)} 
-          className="p-3 hover:bg-zinc-800 rounded-xl transition-colors mb-8 text-zinc-400 hover:text-white"
-        >
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-
-        <div className={`w-full space-y-2 ${!menuOpen && "hidden"}`}>
+      {/* NAVBAR */}
+      <nav className="sticky top-0 z-50 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50">
+        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2 font-bold text-xl tracking-tighter">
+            <div className="w-8 h-8 bg-white text-black flex items-center justify-center rounded-lg italic">B</div>
+            BLOGUM
+          </div>
           <button 
-            onClick={() => setView("notes")}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${view === "notes" ? "bg-blue-600 text-white" : "hover:bg-zinc-800 text-zinc-400"}`}
+            onClick={() => setIsAdmin(!isAdmin)}
+            className={`text-xs px-3 py-1 rounded-full border transition-all ${isAdmin ? "bg-red-500/10 border-red-500/50 text-red-400" : "border-zinc-700 text-zinc-500 hover:text-zinc-300"}`}
           >
-            <BookOpen size={20} />
-            <span className="font-medium">Notlar</span>
+            {isAdmin ? "Admin: AÇIK" : "Admin Girişi"}
           </button>
-          
-          <button 
-            onClick={() => setView("tasks")}
-            className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all ${view === "tasks" ? "bg-emerald-600 text-white" : "hover:bg-zinc-800 text-zinc-400"}`}
-          >
-            <CheckSquare size={20} />
-            <span className="font-medium">Görevler</span>
-          </button>
+        </div>
+      </nav>
 
-          <div className="pt-6 pb-2 text-[10px] uppercase tracking-widest text-zinc-500 font-bold px-3">Kategoriler</div>
-          {categories.map((c) => (
-            <button
-              key={c}
-              onClick={() => { setView("tasks"); setSelectedCategory(c); }}
-              className={`w-full text-left px-3 py-2 rounded-md text-sm transition-all ${selectedCategory === c && view === "tasks" ? "text-emerald-400 bg-emerald-500/10" : "text-zinc-500 hover:text-zinc-300"}`}
+      <main className="max-w-5xl mx-auto px-6 pt-12">
+        
+        {/* YAZI EKLEME PANELİ (Sadece Admin Görebilir) */}
+        {isAdmin && (
+          <div className="mb-16 bg-zinc-900/50 border border-zinc-800 p-6 rounded-3xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex items-center gap-2 mb-6 text-emerald-400 font-medium">
+              <PenTool size={20} /> Yeni Blog Yazısı Oluştur
+            </div>
+            <div className="space-y-4">
+              <input
+                placeholder="Yazı Başlığı..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all"
+              />
+              <div className="flex gap-4">
+                <select 
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="bg-zinc-800/50 border border-zinc-700 rounded-xl px-4 py-2 text-sm outline-none"
+                >
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <textarea
+                placeholder="Yazı içeriğini buraya dökün..."
+                rows={5}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-xl py-3 px-4 focus:ring-2 focus:ring-emerald-500/50 outline-none transition-all resize-none"
+              />
+              <button 
+                onClick={addPost}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                <Plus size={20} /> Yazıyı Yayınla
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* BAŞLIK ALANI */}
+        {!isAdmin && (
+          <header className="mb-16 text-center">
+            <h1 className="text-5xl md:text-7xl font-black mb-4 tracking-tighter">DÜŞÜNCELER.</h1>
+            <p className="text-zinc-500 max-w-lg mx-auto italic">Teknoloji, hayat ve aradaki her şey üzerine tutulmuş ufak notlar.</p>
+          </header>
+        )}
+
+        {/* BLOG YAZILARI LİSTESİ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {posts.map((post) => (
+            <article 
+              key={post.id} 
+              className="group relative bg-zinc-900/30 border border-zinc-800/50 rounded-3xl p-8 hover:bg-zinc-900/50 hover:border-zinc-700 transition-all duration-300"
             >
-              • {c}
-            </button>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-[10px] font-bold uppercase tracking-widest bg-zinc-800 px-2 py-1 rounded text-zinc-400">
+                  {post.category}
+                </span>
+                <span className="text-zinc-600 text-xs flex items-center gap-1">
+                  <Calendar size={12} /> {new Date(post.createdAt).toLocaleDateString('tr-TR')}
+                </span>
+              </div>
+
+              <h2 className="text-2xl font-bold mb-4 group-hover:text-emerald-400 transition-colors leading-tight">
+                {post.title}
+              </h2>
+              
+              <p className="text-zinc-400 line-clamp-3 text-sm leading-relaxed mb-6">
+                {post.content}
+              </p>
+
+              <div className="flex items-center justify-between mt-auto pt-6 border-t border-zinc-800/50">
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <User size={14} /> Admin
+                  <span className="flex items-center gap-1 ml-2"><Clock size={12}/> 3 dk okuma</span>
+                </div>
+                
+                {isAdmin && (
+                  <button 
+                    onClick={() => deletePost(post.id)}
+                    className="p-2 text-zinc-600 hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
+              </div>
+            </article>
           ))}
         </div>
-      </div>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 p-4 md:p-10 max-w-4xl mx-auto w-full">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent">
-            {view === "notes" ? "Notlarım" : `Görevler: ${selectedCategory}`}
-          </h1>
-          <p className="text-zinc-500 text-sm">Bugün neler yapıyoruz?</p>
-        </header>
+        {posts.length === 0 && (
+          <div className="text-center py-20 border-2 border-dashed border-zinc-800 rounded-3xl">
+            <p className="text-zinc-600">Henüz bir yazı paylaşılmadı.</p>
+          </div>
+        )}
 
-        {/* INPUT AREA */}
-        <div className="relative group mb-10">
-          <input
-            value={view === "notes" ? noteInput : taskInput}
-            onChange={(e) => view === "notes" ? setNoteInput(e.target.value) : setTaskInput(e.target.value)}
-            placeholder={view === "notes" ? "Yeni bir not yazın..." : "Yeni bir görev ekleyin..."}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-6 pr-16 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-2xl"
-            onKeyDown={(e) => e.key === "Enter" && (view === "notes" ? addNote() : addTask())}
-          />
-          <button 
-            onClick={view === "notes" ? addNote : addTask}
-            className="absolute right-3 top-1/2 -translate-y-1/2 bg-white text-black p-2 rounded-xl hover:bg-zinc-200 transition-all active:scale-90"
-          >
-            <Plus size={24} />
-          </button>
-        </div>
-
-        {/* LIST AREA */}
-        <div className="grid gap-3">
-          {view === "notes" ? (
-            notes.map((n) => (
-              <div key={n.id} className="group flex justify-between items-center bg-zinc-900/40 border border-zinc-800/50 p-4 rounded-xl hover:border-zinc-700 transition-all">
-                <span className="text-zinc-300 leading-relaxed">{n.text}</span>
-                <button onClick={() => deleteNote(n.id)} className="opacity-0 group-hover:opacity-100 p-2 text-zinc-600 hover:text-red-400 transition-all">
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))
-          ) : (
-            tasks.filter((t) => t.category === selectedCategory).map((t) => (
-              <div key={t.id} className={`group flex justify-between items-center p-4 rounded-xl border transition-all ${t.done ? "bg-zinc-900/20 border-zinc-900/50" : "bg-zinc-900/40 border-zinc-800/50 hover:border-zinc-700"}`}>
-                <div className="flex items-center gap-4 cursor-pointer" onClick={() => toggleTask(t)}>
-                  <div className="text-emerald-500">
-                    {t.done ? <CheckCircle2 size={22} /> : <Circle size={22} className="text-zinc-600" />}
-                  </div>
-                  <span className={`transition-all ${t.done ? "line-through text-zinc-600" : "text-zinc-200"}`}>
-                    {t.text}
-                  </span>
-                </div>
-                <button onClick={() => deleteTask(t.id)} className="opacity-0 group-hover:opacity-100 p-2 text-zinc-600 hover:text-red-400 transition-all">
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
       </main>
     </div>
   );
