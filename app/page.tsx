@@ -13,18 +13,6 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const parseBBCode = (text: string = "") => {
-  let html = text
-    .replace(/\[b\](.*?)\[\/b\]/g, "<strong>$1</strong>")
-    .replace(/\[i\](.*?)\[\/i\]/g, "<em>$1</em>")
-    .replace(/\[u\](.*?)\[\/u\]/g, "<span class='underline'>$1</span>")
-    .replace(/\[color=(.*?)\](.*?)\[\/color\]/g, "<span style='color: $1'>$2</span>")
-    .replace(/\[size=(.*?)\](.*?)\[\/size\]/g, "<span style='font-size: $1px'>$2</span>")
-    .replace(/\[img\](.*?)\[\/img\]/g, "<img src='$1' class='w-full h-auto rounded-2xl my-4 border border-zinc-800' />")
-    .replace(/\n/g, "<br/>");
-  return { __html: html };
-};
-
 const categories = ["Hepsi", "Genel", "Teknoloji", "Yaşam", "Yazılım"];
 const ADMIN_UID = "jVRQixwQyWWGhg0i9i5s88xjK6u1";
 
@@ -67,17 +55,33 @@ export default function MultiUserBlog() {
 
   const getThemeClasses = (color: string) => {
     switch(color) {
-      case "rose": return { text: "text-rose-500", bg: "bg-rose-600", hoverBg: "hover:bg-rose-500", border: "border-rose-500", selection: "selection:bg-rose-500/30", bgTint: "bg-rose-500/5" };
-      case "violet": return { text: "text-violet-500", bg: "bg-violet-600", hoverBg: "hover:bg-violet-500", border: "border-violet-500", selection: "selection:bg-violet-500/30", bgTint: "bg-violet-500/5" };
-      case "amber": return { text: "text-amber-500", bg: "bg-amber-600", hoverBg: "hover:bg-amber-500", border: "border-amber-500", selection: "selection:bg-amber-500/30", bgTint: "bg-amber-500/5" };
-      case "blue": return { text: "text-blue-500", bg: "bg-blue-600", hoverBg: "hover:bg-blue-500", border: "border-blue-500", selection: "selection:bg-blue-500/30", bgTint: "bg-blue-500/5" };
-      default: return { text: "text-emerald-500", bg: "bg-emerald-600", hoverBg: "hover:bg-emerald-500", border: "border-emerald-500", selection: "selection:bg-emerald-500/30", bgTint: "bg-emerald-500/5" };
+      case "rose": return { text: "text-rose-500", bg: "bg-rose-600", hoverBg: "hover:bg-rose-500", border: "border-rose-500", selection: "selection:bg-rose-500/30", bgTint: "bg-rose-500/5", linkText: "text-rose-500 hover:text-rose-400" };
+      case "violet": return { text: "text-violet-500", bg: "bg-violet-600", hoverBg: "hover:bg-violet-500", border: "border-violet-500", selection: "selection:bg-violet-500/30", bgTint: "bg-violet-500/5", linkText: "text-violet-500 hover:text-violet-400" };
+      case "amber": return { text: "text-amber-500", bg: "bg-amber-600", hoverBg: "hover:bg-amber-500", border: "border-amber-500", selection: "selection:bg-amber-500/30", bgTint: "bg-amber-500/5", linkText: "text-amber-500 hover:text-amber-400" };
+      case "blue": return { text: "text-blue-500", bg: "bg-blue-600", hoverBg: "hover:bg-blue-500", border: "border-blue-500", selection: "selection:bg-blue-500/30", bgTint: "bg-blue-500/5", linkText: "text-blue-500 hover:text-blue-400" };
+      default: return { text: "text-emerald-500", bg: "bg-emerald-600", hoverBg: "hover:bg-emerald-500", border: "border-emerald-500", selection: "selection:bg-emerald-500/30", bgTint: "bg-emerald-500/5", linkText: "text-emerald-500 hover:text-emerald-400" };
     }
   };
 
   const theme = getThemeClasses(siteSettings.accentColor);
 
-  // Tarayıcıyı sert yenileyerek profile uçuran fonksiyon
+  // GELİŞMİŞ BBCODE ÇÖZÜCÜ
+  const parseBBCode = (text: string = "") => {
+    let html = text
+      .replace(/\[b\](.*?)\[\/b\]/g, "<strong>$1</strong>")
+      .replace(/\[i\](.*?)\[\/i\]/g, "<em>$1</em>")
+      .replace(/\[u\](.*?)\[\/u\]/g, "<span class='underline'>$1</span>")
+      .replace(/\[color=(.*?)\](.*?)\[\/color\]/g, "<span style='color: $1'>$2</span>")
+      .replace(/\[size=(.*?)\](.*?)\[\/size\]/g, "<span style='font-size: $1px'>$2</span>")
+      .replace(/\[img\](.*?)\[\/img\]/g, "<img src='$1' class='w-full h-auto rounded-2xl my-4 border border-zinc-800' />")
+      .replace(/\[center\]([\s\S]*?)\[\/center\]/g, "<div class='text-center w-full block'>$1</div>")
+      .replace(/\[hr\]/g, "<hr class='my-6 border-zinc-800/80' />")
+      .replace(/\[url=(.*?)\](.*?)\[\/url\]/g, `<a href='$1' target='_blank' class='${theme.linkText} underline font-bold transition-all'>$2</a>`)
+      .replace(/\[url\](.*?)\[\/url\]/g, `<a href='$1' target='_blank' class='${theme.linkText} underline font-bold transition-all'>$1</a>`)
+      .replace(/\n/g, "<br/>");
+    return { __html: html };
+  };
+
   const goToProfile = (userId: string) => {
     if (typeof window !== "undefined") {
       window.location.href = `/u/${userId}`;
